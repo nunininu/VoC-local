@@ -23,14 +23,12 @@ model_name = "joeddav/xlm-roberta-large-xnli"
 tokenizer = XLMRobertaTokenizer.from_pretrained(model_name, use_fast=False)
 classifier = pipeline("zero-shot-classification", model=model_name, tokenizer=tokenizer, device=0)
 okt = Okt()
-kw_model = KeyBERT()
-sentence_model = SentenceTransformer("snunlp/KR-SBERT-V40K-klueNLI-augSTS")
-kw_model_extended = KeyBERT("snunlp/KR-SBERT-V40K-klueNLI-augSTS")
+sentence_model = SentenceTransformer("snunlp/KR-SBERT-V40K-klueNLI-augSTS", device="cuda")
+kw_model_extended = KeyBERT(SentenceTransformer("snunlp/KR-SBERT-V40K-klueNLI-augSTS", device="cuda"))
 
 # 불용어 리스트
 KOREAN_STOPWORDS = [
-    "그냥", "그리고", "근데", "음", "아", "어", "뭐", "그죠", "그러니까", "그거", "저
-기", "부터", "그게", "전화", "전화기", "고객", "상담사"
+    "그냥", "그리고", "근데", "음", "아", "어", "뭐", "그죠", "그러니까", "그거", "저기", "부터", "그게", "전화", "전화기", "고객", "상담사"
 ]
 
 # 도메인 키워드 리스트
@@ -101,19 +99,18 @@ def extract_customer_content(text):
 
 def preprocess_korean(text):
     # 형태소 분석 및 불용어&어미 제거
-    tokens = [word for word, tag in okt.pos(text, stem=True) if tag in ["Noun", "Adjective"]]
+    tokens = [word for word, tag in okt.pos(text, stem=True) if tag == "Noun"]
     filtered_tokens = [token for token in tokens if token not in KOREAN_STOPWORDS]
     final_tokens = [token for token in filtered_tokens if not VERB_SUFFIXES.search(token)]
     return " ".join(final_tokens)
 
-def similarity_filter(keywords, category, threshold=0.3, fallback_top_n=20):
+def similarity_filter(keywords, category, threshold=0.3, fallback_top_n=10):
     # 카테고리 유사도 필터
     cat_embedding = sentence_model.encode([category])
     keyword_embeddings = sentence_model.encode(keywords)
     sims = cosine_similarity(cat_embedding, keyword_embeddings)[0]
     filtered = [kw for kw, sim in zip(keywords, sims) if sim >= threshold]
     return filtered if filtered else keywords[:fallback_top_n]
-
 
 def extract_keywords(text, category, top_n=20, threshold=0.3):
     # 1. 고객 발화만 추출
@@ -132,14 +129,15 @@ def process_message(data):
         client_id = data.get("client_id", "UNKNOWN")
         consulting_content = data.get("consulting_content", "")
         consulting_category = data.get("consulting_category", "")
-        consulting_date = data.get("consulting_date", "1970-01-01")
+        consulting_date = data.get("consulting_date", "2020-01-01")
         duration = data.get("duration", None)
 
+        text = extract_customer_content(consulting_content)
         # 키워드 추출
-        keywords = extract_keywords(consulting_content, consulting_category, 20, 0.3)
+        keywords = extract_keywords(text, consulting_category, 20, 0.3)
 
         # 감정 분석
-        result = classifier(consulting_content, candidate_labels=["불만", "감사"])
+        result = classifier(text, candidate_labels=["불만", "감사"])
         negative_ratio = result["scores"][result["labels"].index("불만")]
         positive_ratio = result['scores'][result['labels'].index("감사")]
 
