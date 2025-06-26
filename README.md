@@ -1,13 +1,12 @@
 # 앞마당 Repo
-### 1. for NLP Analysis 
-```bash
+### 1. for LLM
+* Exaone
 
-```
 
-### 2. for NLP Cleansing
-```bash
-
-```
+### 2. for NLP
+* Okt, KeyBert, SentenceTransformer
+* Transformer, Electra
+* Dlq(Producer, Consumer)
 
 
 # 참고: 본진 Repo Wiki 
